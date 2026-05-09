@@ -6,25 +6,70 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r sourcing-loading-file}
+source("BRFSS_ne_data_prep.R")
 ```
 
-## Including Plots
+### Taking a glimpse of what the data looks like
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r glimpse}
+glimpse(brfss.design$variables)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Summary:
+
+```{r summary}
+brfss.design %>%
+  tbl_svysummary(
+    include  = c(X_AGE_G, X_SEX, X_EDUCAG, X_INCOMG1, X_HLTHPL2),
+    label    = list(
+      X_AGE_G   ~ "Age group",
+      X_SEX     ~ "Sex",
+      X_EDUCAG  ~ "Education",
+      X_INCOMG1 ~ "Household income",
+      X_HLTHPL2 ~ "Health insurance"
+    ),
+    statistic = list(all_categorical() ~ "{p}% ({n_unweighted})")
+  ) %>%
+  modify_caption("**Weighted demographic characteristics, BRFSS 2024**")
+```
+
+### Demographic features
+
+### Socioeconomic features
+
+```{r barplot-income, fig.align='center'}
+ggplot(brfss24_sub %>% drop_na(X_INCOMG1)) +
+  geom_bar(
+    aes(X_INCOMG1, fill = X_INCOMG1),
+    col = "black",
+    linewidth = 0.2,
+    alpha = .8
+  ) +
+  labs(x = "Income", y = "Count", title = "Income distribution") +
+  scale_fill_brewer(palette = "YlOrRd") +
+  theme_bw() +
+  theme(legend.position = "none") 
+```
+
+```{r}
+brfss.design %>%
+  filter(!is.na(X_INCOMG1)) %>%
+  group_by(X_INCOMG1) %>%
+  summarise(prop = survey_mean(vartype = "ci")) %>%
+  ggplot(aes(X_INCOMG1, prop, fill = X_INCOMG1)) +
+  geom_col(col = "black",
+           linewidth = 0.2,
+           alpha = 0.8) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Income", y = "Weighted proportion", title = "Income distribution (weighted)") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+## References
+
+- [https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html](https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html)
