@@ -48,7 +48,7 @@ brfss24 <- brfss_complete %>%
 #   "56" = "Wyoming", "66" = "Guam", "72" = "Puerto Rico", "78" = "Virgin Islands"
 # )
 
-sub_labels <- c("9"  = "Connecticut", "23" = "Maine", "25" = "Massachusetts", "33" = "New Hampshire", "44" = "Rhode Island", "50" = "Vermont")
+sub_labels <- c("6" = "California", "12" = "Florida", "23" = "Maine", "38" = "North Dakota", "17" = "Illinois", "48" = "Texas", "28" = "Mississippi")
 
 sub_codes <- names(sub_labels)
 
@@ -295,7 +295,7 @@ brfss24_sub <- brfss24_sub %>%
 # Exporting the dataset to CSV
 doc_path <- "/Users/elis/Library/Mobile Documents/com~apple~CloudDocs/Documents/magistrale_cloud/courses/HEALTH_DATA_SCIENCE_EM1413/HDS_gp_local/brfss24_sub.csv"
 
-already_exported <- "yes" # da cambiare in "no" per esportarlo
+already_exported <- "no" # da cambiare in "no" per esportarlo
 
 if (already_exported != "yes") {
   write.csv(brfss24_sub, doc_path, row.names = FALSE)

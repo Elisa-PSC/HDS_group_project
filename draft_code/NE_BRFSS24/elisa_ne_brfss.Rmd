@@ -1,29 +1,51 @@
 ---
-title: "Data loading and cleaning - BRFSS"
-author: "Riccardo Gasparini | Gianluca Michelon | Elisa Pascon | Samuele Pasin"
+title: | 
+  <div style="text-align: center; color: black; font-size: 35px; font-weight: bold;">[EM1413] - Data loading and cleaning</div>
+subtitle: | 
+  <div style="text-align: center; color: black; font-size: 30px;">BRFSS 2024 Analysis</div>
+author: |
+  <div style="text-align: center; color: black; font-size: 22px; font-weight: bold;">Group's name</div>
+  <div style="text-align: left; margin: 0 auto; width: fit-content; color: black; font-size: 20px;">
+    • Riccardo Gasparini – 874762<br>
+    • Gianluca Michelon – <br>
+    • Elisa Pascon – 891393<br>
+    • Samuele Pasin – 
+  </div>
+date: |
+  <div style="text-align: center; color: black; font-size: 17px;">a.y. 2025/2026</div>
+  <div style="text-align: center; color: black; font-size: 16px; font-style: italic">exam call: 25th May 2026</div>
 output:
   html_document:
     theme: sandstone
-    toc: true
-    toc_float: true
+    toc: TRUE
+    toc_float:
+      smooth_scroll: TRUE
     toc_depth: 2
-    number_sections: false
+    number_sections: TRUE
     fig_caption: yes
     code_folding: show
     highlight: pygments
-    self_contained: true
+    self_contained: TRUE
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr, 
-               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes)
+               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, ggcorrplot)
 ```
 
-```{r sourcing-loading-file}
-# source("BRFSS_ne_data_prep.R")
+# Research question
 
-brfss24_sub <- read.csv("brfss24_sub.csv")
+> What demographic, socioeconomic and behavioral factors predict participation in preventive cancer screening?
+
+### Source
+
+Dataset: [https://www.cdc.gov/brfss/annual_data/annual_2024.html](https://www.cdc.gov/brfss/annual_data/annual_2024.html)
+
+# Loading and preparing the data
+
+```{r sourcing-loading-file}
+brfss24_sub <- read.csv("brfss24_sub.csv") # from BRFSS_ne_data_prep.R
 
 brfss24_sub <- brfss24_sub %>%
   mutate(across(
@@ -39,6 +61,8 @@ brfss24_sub <- brfss24_sub %>%
   ))
 ```
 
+Creating a survey object in order to properly apply weights:
+
 ```{r svy-obj}
 brfss.design <- brfss24_sub %>%
   as_survey_design(
@@ -50,13 +74,13 @@ brfss.design <- brfss24_sub %>%
 options(survey.lonely.psu = "adjust")
 ```
 
-### Taking a glimpse of what the data looks like
+## Taking a glimpse of what the data looks like
 
 ```{r glimpse}
 glimpse(brfss.design$variables)
 ```
 
-Summary:
+### Summary
 
 ```{r summary}
 brfss.design %>%
@@ -74,9 +98,103 @@ brfss.design %>%
   modify_caption("**Weighted demographic characteristics, BRFSS 2024**")
 ```
 
-### Demographic features
+# Exploratory data analysis
 
-### Socioeconomic features
+```{r intro-corr}
+corr_data <- brfss.design$variables %>%
+  select(any_screening, EXERANY2, X_RFSMOK3, X_BMI5, X_EDUCAG, EMPLOY1, RENTHOM1, X_RACE, X_INCOMG1, X_HLTHPL2, X_SEX) %>%
+  rename(
+    "Any Screening" = any_screening,
+    "Exercise"      = EXERANY2,
+    "Smoking"       = X_RFSMOK3,
+    "BMI"           = X_BMI5,
+    "Education"     = X_EDUCAG,
+    "Employment"    = EMPLOY1,
+    "Renting Home"  = RENTHOM1,
+    "Race"          = X_RACE,
+    "Income"        = X_INCOMG1,
+    "Has Insurance" = X_HLTHPL2,
+    "Sex"           = X_SEX
+  ) %>%
+  mutate(across(everything(), ~ as.numeric(as.factor(.)))) %>%
+  na.omit()
+
+corr_matrix <- cor(corr_data)
+
+ggcorrplot(
+  corr_matrix,
+  method = "square",
+  type = "lower",
+  lab = TRUE,
+  lab_size = 3,
+  colors = c("tomato2", "white", "steelblue"),
+  title = "Correlation Matrix of Predictors",
+  ggtheme = theme_minimal()
+)
+```
+
+## Demographic features
+
+### Age patterns
+
+```{r age-patterns}
+agesex_screen <- brfss.design %>%
+  filter(!is.na(HADSIGM4), !is.na(X_AGE_G), !is.na(X_SEX)) %>%
+  group_by(age = X_AGE_G,
+           sex = X_SEX,
+           response = HADSIGM4) %>%
+  summarise(prop = survey_mean(vartype = "ci"), .groups = "drop") %>%
+  filter(response == 1)
+
+ggplot(agesex_screen, aes(age, prop, colour = sex, group = sex)) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = prop_low, ymax = prop_upp, fill = sex),
+              alpha = 0.15,
+              colour = NA) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = percent_format()) +
+  scale_colour_manual(values = c("forestgreen", "darkmagenta")) +
+  scale_fill_manual(values   = c("forestgreen", "darkmagenta")) +
+  labs(
+    title  = "Colorectal cancer screening by age and sex (weighted)",
+    x      = "Age group",
+    y = "Proportion screened",
+    colour = "Sex",
+    fill = "Sex"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+### BMI relationship
+
+```{r bmi-screening}
+bmi_plot_data <- brfss.design$variables %>%
+  select(any_screening, X_BMI5) %>%
+  filter(!is.na(any_screening), !is.na(X_BMI5)) %>%
+  mutate(screening_label = case_when(any_screening == "1" ~ "Screened", TRUE ~ "Not Screened"))
+
+ggplot(bmi_plot_data,
+       aes(x = screening_label, y = X_BMI5, fill = screening_label)) +
+  geom_violin(alpha = 0.6, color = "black") +
+  geom_boxplot(
+    width = 0.15,
+    fill = "white",
+    color = "black",
+    outlier.alpha = 0.3
+  ) +
+  scale_fill_manual(values = c("brown", "yellow")) +
+  labs(title = "BMI Distribution by Cancer Screening Status", x = "Participation in Any Preventive Screening", y = "Body Mass Index (BMI)") +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 11)
+  )
+```
+
+
+## Socioeconomic features
 
 ```{r barplot-income, fig.align='center'}
 ggplot(brfss24_sub %>% drop_na(X_INCOMG1)) +
@@ -107,11 +225,169 @@ brfss.design %>%
   theme(legend.position = "none")
 ```
 
-## References
+## Behavioural factors
+
+```{r smoke-ex-screen}
+heatmap_data <- brfss.design %>%
+  mutate(
+    EXERANY2 = case_when(
+      EXERANY2 == "1" ~ "Yes",
+      EXERANY2 %in% c("0", "2") ~ "No",
+      TRUE ~ NA_character_
+    ),
+    X_RFSMOK3 = case_when(
+      X_RFSMOK3 == "1" ~ "No",
+      X_RFSMOK3 %in% c("2") ~ "Yes",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  group_by(exercise = EXERANY2,
+           smoking = X_RFSMOK3,
+           screened = any_screening) %>%
+  summarise(prop = survey_mean(vartype = "ci"), .groups = "drop") %>%
+  filter(screened == "1", !is.na(exercise), !is.na(smoking))
+
+ggplot(heatmap_data, aes(x = exercise, y = smoking, fill = prop)) +
+  geom_tile(linewidth = 0.2, alpha = .9, color = "black") +
+  geom_text(
+    aes(label = percent(prop, accuracy = 0.1)),
+    color = "white",
+    fontface = "bold",
+    size = 5
+  ) +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue",
+    labels = percent_format()
+  ) +
+  labs(
+    title = "Cancer Screening Rates by Smoking & Exercise Habits",
+    subtitle = "Survey-weighted proportions",
+    x = "Participated in Any Exercise (Past Month)",
+    y = "Smoking Status",
+    fill = "Screened (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 11),
+    axis.title = element_text(face = "bold")
+  )
+```
+
+```{r income-screening}
+income_plot_data <- brfss.design %>%
+  mutate(
+    income = as.character(X_INCOMG1),
+    screening = case_when(
+      any_screening == "1" ~ "Screened",
+      any_screening %in% c("0", "2") ~ "Not Screened",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  group_by(income, screening) %>%
+  summarise(prop = survey_mean(vartype = "ci"), .groups = "drop") %>%
+  filter(!is.na(income), !is.na(screening))
+
+ggplot(income_plot_data, aes(x = income, y = prop, fill = screening)) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7,
+    color = "black",
+    linewidth = 0.2, 
+    alpha = .9
+  ) +
+  scale_fill_manual(values = c(
+    "Screened" = "navyblue",
+    "Not Screened" = "green4"
+  )) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Preventive Cancer Screening Rates by Income Bracket",
+    subtitle = "Survey-weighted proportions with 95% confidence intervals",
+    x = "Annual Household Income Bracket",
+    y = "Proportion of Population",
+    fill = "Screening Status"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      size = 10
+    )
+  )
+```
+
+
+## Health insurance coverage
+
+```{r insurance-screening-summary}
+calc_sigm <- brfss.design %>%
+  group_by(insurance = X_HLTHPL2, response = HADSIGM4) %>%
+  summarise(prop = survey_mean(na.rm = TRUE, vartype = "ci"),
+            .groups = "drop") %>%
+  filter(response == "1", !is.na(insurance), !is.na(response)) %>%
+  mutate(screening = "HADSIGM4")
+
+calc_mam <- brfss.design %>%
+  group_by(insurance = X_HLTHPL2, response = HADMAM) %>%
+  summarise(prop = survey_mean(na.rm = TRUE, vartype = "ci"),
+            .groups = "drop") %>%
+  filter(response == "1", !is.na(insurance), !is.na(response)) %>%
+  mutate(screening = "HADMAM")
+
+calc_psa <- brfss.design %>%
+  group_by(insurance = X_HLTHPL2, response = PSATEST1) %>%
+  summarise(prop = survey_mean(na.rm = TRUE, vartype = "ci"),
+            .groups = "drop") %>%
+  filter(response == "1", !is.na(insurance), !is.na(response)) %>%
+  mutate(screening = "PSATEST1")
+
+ins_screen <- bind_rows(calc_sigm, calc_mam, calc_psa)
+
+ins_screen %>%
+  select(insurance, screening, prop) %>%
+  pivot_wider(names_from = screening, values_from = prop)
+```
+
+```{r insurance-screening-graph}
+ins_screen %>%
+  mutate(
+    screening = recode(
+      screening,
+      HADSIGM4 = "Colonoscopy/sigmoid.",
+      HADMAM   = "Mammogram",
+      PSATEST1 = "PSA test"
+    )
+  ) %>%
+  ggplot(aes(insurance, prop, fill = insurance)) +
+  geom_col(
+    position = "dodge",
+    alpha = 0.8,
+    colour = "black",
+    linewidth = 0.2
+  ) +
+  facet_wrap( ~ screening) +
+  scale_y_continuous(labels = percent_format()) +
+  scale_fill_manual(values = c("darkviolet", "skyblue")) +
+  labs(title = "Screening participation by health insurance status",
+       x = NULL,
+       y = "Weighted proportion (%)",
+       fill = NULL) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# References
 
 - [https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html](https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html)
 
-**Useful**
+## Useful
+
+To take a look:
 
 - Lumley T (2023). *Complex Surveys: A Guide to Analysis Using R*. Wiley;
 - Lumley T. `survey` package documentation: <http://r-survey.r-forge.r-project.org/survey/>;
