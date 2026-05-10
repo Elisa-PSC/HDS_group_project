@@ -1,0 +1,119 @@
+---
+title: "Data loading and cleaning - BRFSS"
+author: "Riccardo Gasparini | Gianluca Michelon | Elisa Pascon | Samuele Pasin"
+output:
+  html_document:
+    theme: sandstone
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: false
+    fig_caption: yes
+    code_folding: show
+    highlight: pygments
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
+pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr, 
+               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes)
+```
+
+```{r sourcing-loading-file}
+# source("BRFSS_ne_data_prep.R")
+
+brfss24_sub <- read.csv("brfss24_sub.csv")
+
+brfss24_sub <- brfss24_sub %>%
+  mutate(across(
+    .cols = c(
+      where(is.integer),
+      where(is.character),
+      where(is.logical),
+      -X_PSU,
+      -X_STSTR,
+      -X_LLCPWT
+    ),
+    .fns = as.factor
+  ))
+```
+
+```{r svy-obj}
+brfss.design <- brfss24_sub %>%
+  as_survey_design(
+    ids = X_PSU,
+    weights = X_LLCPWT,
+    strata = X_STSTR,
+    nest = TRUE
+  )
+options(survey.lonely.psu = "adjust")
+```
+
+### Taking a glimpse of what the data looks like
+
+```{r glimpse}
+glimpse(brfss.design$variables)
+```
+
+Summary:
+
+```{r summary}
+brfss.design %>%
+  tbl_svysummary(
+    include  = c(X_AGE_G, X_SEX, X_EDUCAG, X_INCOMG1, X_HLTHPL2),
+    label    = list(
+      X_AGE_G   ~ "Age group",
+      X_SEX     ~ "Sex",
+      X_EDUCAG  ~ "Education",
+      X_INCOMG1 ~ "Household income",
+      X_HLTHPL2 ~ "Health insurance"
+    ),
+    statistic = list(all_categorical() ~ "{p}% ({n_unweighted})")
+  ) %>%
+  modify_caption("**Weighted demographic characteristics, BRFSS 2024**")
+```
+
+### Demographic features
+
+### Socioeconomic features
+
+```{r barplot-income, fig.align='center'}
+ggplot(brfss24_sub %>% drop_na(X_INCOMG1)) +
+  geom_bar(
+    aes(X_INCOMG1, fill = X_INCOMG1),
+    col = "black",
+    linewidth = 0.2,
+    alpha = .8
+  ) +
+  labs(x = "Income", y = "Count", title = "Income distribution") +
+  scale_fill_brewer(palette = "YlOrRd") +
+  theme_bw() +
+  theme(legend.position = "none") 
+```
+
+```{r}
+brfss.design %>%
+  filter(!is.na(X_INCOMG1)) %>%
+  group_by(X_INCOMG1) %>%
+  summarise(prop = survey_mean(vartype = "ci")) %>%
+  ggplot(aes(X_INCOMG1, prop, fill = X_INCOMG1)) +
+  geom_col(col = "black",
+           linewidth = 0.2,
+           alpha = 0.8) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Income", y = "Weighted proportion", title = "Income distribution (weighted)") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+## References
+
+- [https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html](https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html)
+
+**Useful**
+
+- Lumley T (2023). *Complex Surveys: A Guide to Analysis Using R*. Wiley;
+- Lumley T. `survey` package documentation: <http://r-survey.r-forge.r-project.org/survey/>;
+- Bates D et al. `lme4`: Linear mixed-effects models using Eigen and S4. *J Stat Softw* 67(1), 2015;
+- Tutorial on BRFSS in R: <https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html>.
