@@ -13,42 +13,56 @@ knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 ```{r}
 pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr, 
                kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, choroplethr, choroplethrMaps)
+options(survey.lonely.psu = "adjust")
 
 df <- read.csv("brfss24_sub.csv")
 ```
 
+Conversione a survey Obj
+```{r}
+brfss.design <- df %>%
+  as_survey_design(
+    ids = X_PSU,
+    weights = X_LLCPWT,
+    strata = X_STSTR,
+    nest = TRUE
+  )
+```
+
+
 
 ```{r}
-df %>% 
-  group_by(X_STATE) %>% 
-  summarise(n = n(),
-            prop = round((n/nrow(df))*100,2)) %>% 
-  arrange(desc(n))
+brfss.design %>%
+  group_by(X_STATE) %>%
+  summarise(
+    n        = n(),                          # numero grezzo di interviste
+    pop_est  = survey_total(vartype = NULL), # popolazione stimata rappresentata
+  ) %>%
+  mutate(
+    prop = round((pop_est / sum(pop_est)) * 100, 2)
+  ) %>%
+  arrange(desc(pop_est))
 ```
 
 
 ```{r}
 
-# Calcola la proporzione di mammografia per stato
-state_mam <- df %>%
-  filter(X_SEX == "Female", !is.na(HADMAM), !is.na(X_STATE)) %>%
+# Calcola la proporzione di mammografia per stato pesata
+state_mam_weighted <- brfss.design %>%
+  filter(!is.na(HADMAM), !is.na(X_STATE)) %>%
   group_by(X_STATE) %>%
   summarise(
-    n     = n(),
-    value = mean(HADMAM == 1, na.rm = TRUE)  # proporzione di Yes
+    value = survey_mean(HADMAM == 1, na.rm = TRUE, vartype = "ci")
   ) %>%
-  mutate(
-    region = tolower(X_STATE) # la funzione vuole i nomi in minuscolo
-  ) %>%
-  select(region, value)
+  mutate(region = tolower(X_STATE))
 
 nordest <- c("connecticut", "massachusetts",
              "rhode island", "vermont", "new hampshire",
              "maine")
 
 # La mappa
-state_choropleth(
-  state_mam,
+choroplethr::state_choropleth(
+  state_mam_weighted,
   title  = "Mammography participation by State",
   legend = "Proportion",
   zoom   = nordest
@@ -58,9 +72,46 @@ state_choropleth(
 ```
 
 
+```{r}
+ggplot(data = brfss.design) +
+  geom_boxplot(aes(X_STATE, X_BMI5, weight = X_LLCPWT))
+
+```
+
+```{r}
+brfss.design %>%
+  filter(!is.na(X_STATE), !is.na(X_INCOMG1)) %>%
+  filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
+  group_by(X_STATE, X_INCOMG1) %>%
+  summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
+  group_by(X_STATE) %>%
+  mutate(prop = pop / sum(pop)) %>%
+  ungroup() %>%                         # <- togli il group_by prima del reorder
+  mutate(
+    X_STATE = fct_reorder(
+      X_STATE,
+      ifelse(X_INCOMG1 == "200k+", prop, NA),  # NA per le altre fasce
+      .fun = mean,                               # aggrega con mean (ignora NA)
+      na.rm = TRUE
+    )
+  ) %>%
+  ggplot(aes(x = X_STATE, y = prop, fill = X_INCOMG1)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "RdYlGn", direction = 1) +
+  labs(
+    title    = "Distribuzione del reddito per stato",
+    subtitle = "BRFSS 2024 — stime pesate",
+    x        = NULL,
+    y        = "Proporzione",
+    fill     = "Fascia di reddito"
+  ) +
+  theme_bw(base_size = 9) +
+  theme(
+    axis.text.y     = element_text(size = 7),
+    legend.position = "bottom"
+  )
+```
 
 
-
-## References
-
-- [https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html](https://ikwak2.github.io/tutorials/BRFSS/BRFSS.html)
