@@ -11,6 +11,9 @@ knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 
 
 ```{r}
+pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr, 
+               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, choroplethr, choroplethrMaps)
+
 df <- read.csv("brfss24_sub.csv")
 ```
 
@@ -22,6 +25,40 @@ df %>%
             prop = round((n/nrow(df))*100,2)) %>% 
   arrange(desc(n))
 ```
+
+
+```{r}
+
+# Calcola la proporzione di mammografia per stato
+state_mam <- df %>%
+  filter(X_SEX == "Female", !is.na(HADMAM), !is.na(X_STATE)) %>%
+  group_by(X_STATE) %>%
+  summarise(
+    n     = n(),
+    value = mean(HADMAM == 1, na.rm = TRUE)  # proporzione di Yes
+  ) %>%
+  mutate(
+    region = tolower(X_STATE) # la funzione vuole i nomi in minuscolo
+  ) %>%
+  select(region, value)
+
+nordest <- c("connecticut", "massachusetts",
+             "rhode island", "vermont", "new hampshire",
+             "maine")
+
+# La mappa
+state_choropleth(
+  state_mam,
+  title  = "Mammography participation by State",
+  legend = "Proportion",
+  zoom   = nordest
+  )
+
+
+```
+
+
+
 
 
 ## References
