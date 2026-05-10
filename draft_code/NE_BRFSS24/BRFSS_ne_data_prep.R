@@ -62,7 +62,7 @@ sprintf("After subsetting, the dataset presents %d records and %d number of vari
 
 
 # Cleaning and re-levelling the data:
-  
+
 brfss24_sub <- brfss24_sub %>%
   # transforming 7, 9, 77 and 99 values into NAs
   mutate(across(
@@ -129,8 +129,17 @@ brfss24_sub <- brfss24_sub %>%
         "200k+"
       )
     ),
-    
-    X_EDUCAG = factor(X_EDUCAG, ordered = TRUE),
+    X_EDUCAG = factor(
+      X_EDUCAG,
+      levels = 1:4,
+      labels = c(
+        "Did not graduate High School",
+        "Graduated High School",
+        "Attended College or Technical School",
+        "Graduated from College or Technical"
+      ),
+      ordered = TRUE
+    ), 
     EMPLOY1  = factor(EMPLOY1),
     RENTHOM1 = factor(RENTHOM1),
     X_HLTHPL2 = factor(
@@ -284,7 +293,7 @@ brfss24_sub <- brfss24_sub %>%
   )
 
 # Exporting the dataset to CSV
-doc_path <- "/Users/elis/Library/Mobile Documents/com~apple~CloudDocs/Documents/magistrale_cloud/courses/HEALTH_DATA_SCIENCE_EM1413/HDS_group_project/brfss24_sub.csv"
+doc_path <- "/Users/elis/Library/Mobile Documents/com~apple~CloudDocs/Documents/magistrale_cloud/courses/HEALTH_DATA_SCIENCE_EM1413/HDS_gp_local/brfss24_sub.csv"
 
 already_exported <- "yes" # da cambiare in "no" per esportarlo
 
@@ -294,7 +303,7 @@ if (already_exported != "yes") {
 
 
 # Converting the dataset into a survey design object:
-  
+
 brfss.design <- brfss24_sub %>%
   as_survey_design(
     ids = X_PSU,
@@ -305,5 +314,3 @@ brfss.design <- brfss24_sub %>%
 
 # in the case of variables (State?) having just 1 PSU, to avoid calculation errors:
 options(survey.lonely.psu = "adjust")
-
-
