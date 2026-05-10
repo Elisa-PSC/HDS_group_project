@@ -64,45 +64,90 @@ nordest <- c("connecticut", "massachusetts",
 choroplethr::state_choropleth(
   state_mam_weighted,
   title  = "Mammography participation by State",
-  legend = "Proportion",
-  zoom   = nordest
+  legend = "Proportion"
   )
 
 
 ```
-
+## BMI value destribution by country (Weighted)
 
 ```{r}
 ggplot(data = brfss.design) +
   geom_boxplot(aes(X_STATE, X_BMI5, weight = X_LLCPWT))
 
+
+#ggplot(data = df %>% 
+ # filter(X_STATE == "Maine")) +
+  #geom_point(aes(x = X_BI))
+
 ```
 
-```{r}
+```{r, include = FALSE}
+# split per razza
+
 brfss.design %>%
-  filter(!is.na(X_STATE), !is.na(X_INCOMG1)) %>%
+  filter(!is.na(X_STATE), !is.na(X_INCOMG1), !is.na(X_RACE)) %>%  # aggiungi X_RACE
   filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
-  group_by(X_STATE, X_INCOMG1) %>%
+  group_by(X_STATE, X_INCOMG1, X_RACE) %>%                          # aggiungi X_RACE
   summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
-  group_by(X_STATE) %>%
+  group_by(X_STATE, X_RACE) %>%                                      # aggiungi X_RACE
   mutate(prop = pop / sum(pop)) %>%
-  ungroup() %>%                         # <- togli il group_by prima del reorder
+  ungroup() %>%
   mutate(
     X_STATE = fct_reorder(
       X_STATE,
-      ifelse(X_INCOMG1 == "200k+", prop, NA),  # NA per le altre fasce
-      .fun = mean,                               # aggrega con mean (ignora NA)
+      ifelse(X_INCOMG1 == "200k+", prop, NA),
+      .fun  = mean,
       na.rm = TRUE
     )
   ) %>%
   ggplot(aes(x = X_STATE, y = prop, fill = X_INCOMG1)) +
   geom_col() +
   coord_flip() +
+  facet_wrap(~ X_RACE, ncol = 2) +                                   # <- aggiunto
   scale_y_continuous(labels = scales::percent_format()) +
   scale_fill_brewer(palette = "RdYlGn", direction = 1) +
   labs(
-    title    = "Distribuzione del reddito per stato",
+    title    = "Distribuzione del reddito per stato e per etnia",
     subtitle = "BRFSS 2024 — stime pesate",
+    x        = NULL,
+    y        = "Proporzione",
+    fill     = "Fascia di reddito"
+  ) +
+  theme_bw(base_size = 8) +
+  theme(
+    axis.text.y     = element_text(size = 5),   # testo più piccolo perché i pannelli sono tanti
+    axis.text.x     = element_text(size = 6),
+    legend.position = "bottom",
+    strip.text      = element_text(size = 7, face = "bold")  # titolo dei pannelli
+  )
+```
+
+
+
+
+## Income distribuzione by state (Weighted)
+
+```{r}
+## split per stato
+
+brfss.design %>%
+  filter(!is.na(X_STATE), !is.na(X_INCOMG1), !is.na(X_RACE)) %>%
+  group_by(X_STATE, X_RACE, X_INCOMG1) %>%
+  summarise(pop = survey_total(vartype = NULL),
+            .groups = "drop") %>%
+  group_by(X_STATE, X_RACE) %>%                        # proporzione dentro ogni stato x razza
+  mutate(prop = pop / sum(pop)) %>%
+  ungroup() %>%
+  ggplot(aes(x = X_RACE, y = prop, fill = X_INCOMG1)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ X_STATE, ncol = 3) +                    # facet per stato
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "RdYlGn", direction = 1) +
+  labs(
+    title    = "Distribuzione del reddito per razza — per stato",
+    subtitle = "BRFSS 2024 — stime pesate. Proporzioni calcolate per razza dentro ogni stato",
     x        = NULL,
     y        = "Proporzione",
     fill     = "Fascia di reddito"
@@ -110,7 +155,64 @@ brfss.design %>%
   theme_bw(base_size = 9) +
   theme(
     axis.text.y     = element_text(size = 7),
-    legend.position = "bottom"
+    axis.text.x     = element_text(size = 6),
+    legend.position = "bottom",
+    strip.text      = element_text(size = 8, face = "bold")
+  ) +
+  guides(fill = guide_legend(nrow = 2))
+```
+
+
+```{r, echo=FALSE,results='hide'}
+brfss.design %>%
+  filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
+  group_by(X_STATE, X_RACE) %>%
+  summarise(
+    n        = unweighted(n()),              # conteggio grezzo delle interviste
+    pop_est  = survey_total(vartype = NULL), # stima della popolazione pesata
+    .groups  = "drop"
+  ) %>%
+  group_by(X_STATE) %>%
+  mutate(prop = pop_est / sum(pop_est)) %>% # proporzione pesata per stato
+  ungroup()
+```
+
+## Weighted Race per State
+
+```{r}
+brfss.design %>%
+  filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
+  filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
+  group_by(X_STATE, X_RACE) %>%
+  summarise(pop_est = survey_total(vartype = NULL), .groups = "drop") %>%
+  group_by(X_STATE) %>%
+  mutate(prop = pop_est / sum(pop_est)) %>%
+  ungroup() %>%
+  mutate(X_STATE = fct_reorder(
+    X_STATE,
+    ifelse(X_RACE == "Hispanic", prop, NA),
+    .fun = mean, na.rm = TRUE
+  )) %>%
+  ggplot(aes(x = X_RACE, y = X_STATE, fill = prop)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = scales::percent(prop, accuracy = 1)),
+            size = 2, color = "black") +
+  scale_fill_gradient(
+    low    = "#fbf7f0",
+    high   = "#8b1e3f",
+    labels = scales::percent_format(),
+    name   = "Proporzione"
+  ) +
+  labs(
+    title    = "Composizione etnica per stato",
+    subtitle = "BRFSS 2024 — stime pesate",
+    x        = NULL,
+    y        = NULL
+  ) +
+  theme_bw(base_size = 9) +
+  theme(
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(angle = 35, hjust = 1, size = 7)
   )
 ```
 
