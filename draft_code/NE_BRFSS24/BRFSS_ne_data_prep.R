@@ -140,7 +140,21 @@ brfss24_sub <- brfss24_sub %>%
       ),
       ordered = TRUE
     ), 
-    EMPLOY1  = factor(EMPLOY1),
+    EMPLOY1  = factor(
+      EMPLOY1,
+      levels = c(1:9),
+      labels = c(
+        "Employed for wages",
+        "Self-employed",
+        "Out of work for 1 year or more",
+        "Out of work for less than 1 year",
+        "A homemaker",
+        "A student",
+        "Retired",
+        "Unable to work",
+        "Refused"
+      )
+    ), 
     RENTHOM1 = factor(RENTHOM1),
     X_HLTHPL2 = factor(
       X_HLTHPL2,
@@ -295,7 +309,7 @@ brfss24_sub <- brfss24_sub %>%
 # Exporting the dataset to CSV
 doc_path <- "/Users/elis/Library/Mobile Documents/com~apple~CloudDocs/Documents/magistrale_cloud/courses/HEALTH_DATA_SCIENCE_EM1413/HDS_gp_local/brfss24_sub.csv"
 
-already_exported <- "no" # da cambiare in "no" per esportarlo
+already_exported <- "yes" # da cambiare in "no" per esportarlo
 
 if (already_exported != "yes") {
   write.csv(brfss24_sub, doc_path, row.names = FALSE)
