@@ -130,8 +130,17 @@ ggcorrplot(
   colors = c("tomato2", "white", "steelblue"),
   title = "Correlation Matrix of Predictors",
   ggtheme = theme_minimal()
-)
+) +
+  theme(plot.title = element_text(face = "bold", size = 14))
 ```
+
+```{r corr-pairs}
+# manca library
+# brfss.design$variables %>% drop_na(X_SEX, EMPLOY1, RENTHOM1) %>%
+#   select(X_SEX, EMPLOY1, RENTHOM1) %>%
+#   ggpairs()
+```
+
 
 ## Demographic features
 
@@ -148,9 +157,9 @@ agesex_screen <- brfss.design %>%
 
 ggplot(agesex_screen, aes(age, prop, colour = sex, group = sex)) +
   geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = prop_low, ymax = prop_upp, fill = sex),
-              alpha = 0.15,
-              colour = NA) +
+  # geom_ribbon(aes(ymin = prop_low, ymax = prop_upp, fill = sex),
+  #             alpha = 0.15,
+  #             colour = NA) +
   geom_point(size = 2) +
   scale_y_continuous(labels = percent_format()) +
   scale_colour_manual(values = c("forestgreen", "darkmagenta")) +
@@ -163,8 +172,66 @@ ggplot(agesex_screen, aes(age, prop, colour = sex, group = sex)) +
     fill = "Sex"
   ) +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+  theme(axis.text.x = element_text(angle = 20, hjust = 1),
+        plot.title = element_text(face = "bold", size = 14))
 ```
+
+```{r age-distribution}
+ggplot(brfss24_sub %>% drop_na(X_AGE_G)) +
+  geom_bar(
+    aes(X_AGE_G, fill = X_AGE_G),
+    col = "black",
+    linewidth = 0.2,
+    alpha = .8
+  ) +
+  labs(x = "Age", y = "Count", title = "Age distribution") +
+  # scale_fill_brewer(palette = "YlOrRd") +
+  scale_color_viridis_d() +
+  theme_bw() +
+  theme(legend.position = "none", 
+        plot.title = element_text(face = "bold", size = 14)) 
+```
+
+
+### Sex
+
+```{r sex-distribution}
+plot_don <- brfss24_sub %>%
+  group_by(X_SEX) %>%
+  summarise(count = n()) %>%
+  mutate(
+    prop = count / sum(count),
+    label = percent(prop)
+  )
+
+ggplot(plot_don, aes(x = "", y = prop, fill = X_SEX)) +
+  geom_bar(stat = "identity", width = 1, alpha = .8, color = "black", linewidth =.2) +
+  coord_polar("y", start = 0) +
+  # 3. Add the labels
+  geom_text(aes(label = label), 
+            position = position_stack(vjust = 0.5), 
+            size = 5, 
+            color = "white",
+            fontface = "bold") +
+  scale_fill_manual(values = c("Male" = "darkblue", "Female" = "red3")) +
+  theme_void() +
+  labs(title = "Sex Distribution Percentage", fill = "Sex") +
+  theme(plot.title = element_text(face = "bold", size = 14))
+```
+
+### BMI distribution
+
+```{r bmi-distribution}
+avg_BMI <- brfss24_sub %>% drop_na(X_BMI5) %>% summarise(mean_BMI = mean(X_BMI5))
+
+brfss24_sub %>% drop_na(X_BMI5) %>%
+  ggplot() +
+  geom_histogram(aes(x = X_BMI5), binwidth = 1.5, fill = "darkorange", colour = 'black', alpha = .8, linewidth = .2) +
+  labs(title = "Distribution of BMI", x = 'BMI', y = 'count') +
+  theme_minimal() +
+  geom_vline(aes(xintercept = avg_BMI[[1]]), colour = 'red')
+```
+
 
 ### BMI relationship
 
@@ -196,6 +263,8 @@ ggplot(bmi_plot_data,
 
 ## Socioeconomic features
 
+### Income distribution
+
 ```{r barplot-income, fig.align='center'}
 ggplot(brfss24_sub %>% drop_na(X_INCOMG1)) +
   geom_bar(
@@ -207,10 +276,11 @@ ggplot(brfss24_sub %>% drop_na(X_INCOMG1)) +
   labs(x = "Income", y = "Count", title = "Income distribution") +
   scale_fill_brewer(palette = "YlOrRd") +
   theme_bw() +
-  theme(legend.position = "none") 
+  theme(legend.position = "none", 
+        plot.title = element_text(face = "bold", size = 14)) 
 ```
 
-```{r}
+```{r barplot-income-relative}
 brfss.design %>%
   filter(!is.na(X_INCOMG1)) %>%
   group_by(X_INCOMG1) %>%
@@ -222,7 +292,51 @@ brfss.design %>%
   scale_y_continuous(labels = percent_format()) +
   labs(x = "Income", y = "Weighted proportion", title = "Income distribution (weighted)") +
   theme_bw() +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", size = 14))
+```
+
+### Employment distribution
+
+```{r barplot-employment, fig.align='center'}
+ggplot(brfss24_sub %>% drop_na(EMPLOY1)) +
+  geom_bar(
+    aes(EMPLOY1, fill = EMPLOY1),
+    col = "black",
+    linewidth = 0.2,
+    alpha = .8
+  ) +
+  labs(x = "Income", y = "Count", title = "Employment distribution") +
+  scale_fill_brewer(palette = "YlOrRd") +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(
+          angle = 45,
+          hjust = 1,
+          size = 10
+        ),
+        plot.title = element_text(face = "bold", size = 14))
+```
+
+### Education distribution
+
+```{r educ-distribution}
+ggplot(brfss24_sub %>% drop_na(X_EDUCAG),
+       aes(X_EDUCAG, fill = X_EDUCAG)) +
+  geom_bar(col = "black",
+           linewidth = 0.2,
+           alpha = .8) +
+  scale_x_discrete(labels = label_wrap(25)) +
+  labs(x = "Education level", y = "Count", title = "Education level distribution") +
+  scale_fill_brewer(palette = "YlOrRd") +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(
+          angle = 45,
+          hjust = 1,
+          size = 10
+        ),
+        plot.title = element_text(face = "bold", size = 14))
 ```
 
 ## Behavioural factors
