@@ -1,9 +1,0 @@
----
-title: "prova"
-output: html_document
----
-
-```{r}
-ciao <- "ciao"
-```
-
