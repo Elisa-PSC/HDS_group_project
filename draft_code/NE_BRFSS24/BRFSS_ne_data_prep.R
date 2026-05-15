@@ -129,17 +129,7 @@ brfss24_sub <- brfss24_sub %>%
         "200k+"
       )
     ),
-    X_EDUCAG = factor(
-      X_EDUCAG,
-      levels = 1:4,
-      labels = c(
-        "Did not graduate High School",
-        "Graduated High School",
-        "Attended College or Technical School",
-        "Graduated from College or Technical"
-      ),
-      ordered = TRUE
-    ), 
+    X_EDUCAG = factor(X_EDUCAG), 
     EMPLOY1  = factor(
       EMPLOY1,
       levels = c(1:9),
@@ -188,20 +178,7 @@ brfss24_sub <- brfss24_sub %>%
     ),
     X_RFDRHV9 = factor(X_RFDRHV9),
     X_BMI5 = as.numeric(X_BMI5) / 100,
-    X_RACE = factor(
-      X_RACE,
-      levels = 1:8,
-      labels = c(
-        "White only, non-Hispanic",
-        "Black only, non-Hispanic",
-        "American Indian or Alaskan Native only, non-Hispanic",
-        "Asian only, non-Hispanic",
-        "Native Hawaiian or other Pacific Islander only, non-Hispanic",
-        "Other race only, non-Hispanic",
-        "Multiracial, non-Hispanic",
-        "Hispanic"
-      )
-    ),
+    X_RACE = factor(X_RACE),
     CERVSCRN = factor(
       CERVSCRN,
       levels = c(1, 2),
