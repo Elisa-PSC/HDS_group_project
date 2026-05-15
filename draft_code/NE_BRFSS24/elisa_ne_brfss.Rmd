@@ -31,7 +31,7 @@ output:
 ```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr, 
-               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, ggcorrplot)
+               kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, ggcorrplot, GGally)
 ```
 
 # Research question
@@ -134,14 +134,6 @@ ggcorrplot(
   theme(plot.title = element_text(face = "bold", size = 14))
 ```
 
-```{r corr-pairs}
-# manca library
-# brfss.design$variables %>% drop_na(X_SEX, EMPLOY1, RENTHOM1) %>%
-#   select(X_SEX, EMPLOY1, RENTHOM1) %>%
-#   ggpairs()
-```
-
-
 ## Demographic features
 
 ### Age patterns
@@ -191,7 +183,6 @@ ggplot(brfss24_sub %>% drop_na(X_AGE_G)) +
   theme(legend.position = "none", 
         plot.title = element_text(face = "bold", size = 14)) 
 ```
-
 
 ### Sex
 
@@ -494,6 +485,145 @@ ins_screen %>%
   theme_bw() +
   theme(legend.position = "none")
 ```
+
+# Models
+
+```{r model-var-selection}
+# da aggiungere prima
+# model_data <- brfss24_sub %>%
+#   filter(!is.na(any_screening)) %>%
+#   drop_na(X_AGE_G, X_SEX, X_RACE, MARITAL, VETERAN3, X_INCOMG1, X_EDUCAG, EMPLOY1, RENTHOM1, X_HLTHPL2,
+#           PERSDOC3, MEDCOST1, X_RFSMOK3, EXERANY2, X_BMI5, X_RFDRHV9)
+# 
+# brfss.design.clean <- model_data %>%
+#   as_survey_design(ids = X_PSU, strata = X_STSTR, weights = X_LLCPWT, nest = TRUE)
+# 
+# svy_null <- svyglm(any_screening ~ 1, design = final_design, family = quasibinomial())
+# 
+# svy_full <- svyglm(
+#   any_screening ~ X_AGE_G + X_SEX + X_RACE + MARITAL + VETERAN3 + X_INCOMG1 + X_EDUCAG + EMPLOY1 +
+#     RENTHOM1 +  X_HLTHPL2 + PERSDOC3 + MEDCOST1 + X_RFSMOK3 + EXERANY2 + X_BMI5 + X_RFDRHV9, 
+#   design = final_design, 
+#   family = quasibinomial(link = "logit")
+# )
+# 
+# svy_forward <- step(
+#   svy_null,
+#   scope = list(lower = svy_null, upper = svy_full),
+#   direction = "forward",
+#   trace = 1
+# )
+# 
+# svy_backward <- step(
+#   svy_full,
+#   direction = "backward",
+#   trace = 1
+# )
+# 
+# svy_stepwise <- step(
+#   svy_null,
+#   scope = list(lower = svy_null, upper = svy_full),
+#   direction = "both",
+#   trace = 1
+# )
+# 
+# formula(svy_forward)
+# formula(svy_backward)
+# formula(svy_stepwise)
+# ----- NON FUNZIONA -----
+```
+
+
+## Prova modello 1 - Logistic regression
+
+```{r model1-data}
+model_svyglm <- svyglm(
+  any_screening ~ X_AGE_G + X_SEX + X_EDUCAG + X_INCOMG1 +
+    X_HLTHPL2 + X_RFSMOK3 + EXERANY2 + X_BMI5 + X_RACE,
+  design = brfss.design,
+  family = quasibinomial(link = "logit")
+)
+
+summary(model_svyglm)
+```
+
+- Sex (`X_SEXFemale`): strongest predictor ($Estimate = 2.93$). Being female massively increases the odds of having had "any screening" compared to males $\rightarrow$ however, this is due to the fact that there are two screening that are exclusively for women;
+- Age (`X_AGE_G.L`): (.L = "Linear" trend). The positive estimate ($4.17$) means that as age increases, the likelihood of screening increases significantly;
+- Insurance (`X_HLTHPL2Not insured`): negative estimate ($-0.507$) shows that being uninsured is a significant barrier, decreasing the odds of screening compared to those with insurance;
+- BMI (`X_BMI5`): for every unit increase in BMI, the odds of screening increase slightly ($0.025$);the number is small, the p-value is highly significant ($***$) $\rightarrow$ from the EDA grphs, though, we can see there is no much correlation between the two variables;
+
+
+- Asian only: significantly less likely to have had screening ($-0.807$);
+- Hispanic: significantly less likely to have had screening ($-0.202$);
+- Black / Multiracial: there is no significant difference compared to the reference group ($p > 0.05$).
+
+
+- Education (`X_EDUCAG.L`): there is a significant positive linear trend. Higher education levels correlate with a higher likelihood of screening;
+- Income: most income brackets aren't significantly different from the reference (lowest income), except for the \$100k–\$200k group, which shows a significant increase in screening odds.
+
+
+```{r m1-results}
+(
+  tbl_svyglm <- tbl_regression(
+    model_svyglm,
+    exponentiate = TRUE,
+    # gives odds ratios
+    label = list(
+      # just replaces labels
+      X_AGE_G ~ "Age group",
+      X_SEX ~ "Sex",
+      X_EDUCAG ~ "Education",
+      X_INCOMG1 ~ "Household income",
+      X_HLTHPL2 ~ "Health insurance",
+      X_RFSMOK3 ~ "Current smoker",
+      EXERANY2 ~ "Any exercise",
+      X_BMI5 ~ "BMI",
+      X_RACE ~ "Race/Ethnicity"
+    )
+  ) %>%
+    bold_p(t = 0.05) %>% # significant = bold
+    bold_labels() %>%
+    modify_caption("**Survey-weighted logistic regression: OR (95% CI)**")
+)
+# if the CI contains 1 = not significant
+```
+
+
+```{r m1-predict-insurance}
+ggeffects::ggpredict(model_svyglm, terms = c("X_INCOMG1", "X_HLTHPL2")) %>%
+  plot() +
+  labs(
+    title = "Predicted probability of screening by income & insurance",
+    x = "Income bracket",
+    y = "Predicted probability",
+    color = "Has insurance"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", size = 13)
+  )
+```
+
+```{r}
+ggeffects::ggpredict(model_svyglm, terms = c("X_INCOMG1", "X_EDUCAG")) %>%
+  plot() +
+  labs(
+    title = "Predicted probability of screening by income & insurance",
+    x = "Income bracket",
+    y = "Predicted probability",
+    color = "Has insurance"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", size = 13),
+    legend.position = "bottom"
+  )
+```
+
+
+Looking at the dots: across every single income bracket, people with insurance have a higher predicted probability of being screened than those without.
 
 # References
 
