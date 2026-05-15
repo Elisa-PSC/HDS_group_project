@@ -307,7 +307,7 @@ brfss24_sub <- brfss24_sub %>%
   )
 
 # Exporting the dataset to CSV
-doc_path <- "/Users/elis/Library/Mobile Documents/com~apple~CloudDocs/Documents/magistrale_cloud/courses/HEALTH_DATA_SCIENCE_EM1413/HDS_gp_local/brfss24_sub.csv"
+doc_path <- "" # dove volete salvarlo (locale)
 
 already_exported <- "yes" # da cambiare in "no" per esportarlo
 
