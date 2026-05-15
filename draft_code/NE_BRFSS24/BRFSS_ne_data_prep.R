@@ -293,15 +293,15 @@ brfss24_sub <- brfss24_sub %>%
     # mammography among women only (excluding those with hysterectomy, see below)
     mam_women = factor(if_else(
       X_SEX == "Female",
-      if_else(HADMAM == "Yes", 1L, 0L, missing = NA_integer_),
+      if_else(HADMAM == 1, 1L, 0L, missing = NA_integer_),
       NA_integer_ # males get an NA and not a 0, since they must not be coded as "didn't get screened"
     ), levels = c(0, 1)),
     # cervical screening: restrict to women without hysterectomy
     cerv_screen = factor(case_when(
       X_SEX == "Female" & (is.na(HADHYST2) | HADHYST2 == "No") &
-        CERVSCRN == "Yes"  ~ 1L,
+        CERVSCRN == 1  ~ 1L,
       X_SEX == "Female" & (is.na(HADHYST2) | HADHYST2 == "No") &
-        CERVSCRN == "No"   ~ 0L,
+        CERVSCRN == 0   ~ 0L,
       TRUE ~ NA_integer_ # men and women with hysterectomy
     ))
   )
