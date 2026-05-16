@@ -15,35 +15,37 @@ pacman::p_load(foreign, tidyverse, forcats, survey, srvyr, lme4, lmerTest, knitr
                kableExtra, gt, gtsummary, scales, patchwork, ggeffects, palettes, choroplethr, choroplethrMaps)
 options(survey.lonely.psu = "adjust")
 
-df <- read.csv("brfss24_sub.csv")
+brfss24_sub <- read.csv("brfss24_sub.csv")
+
+brfss24_sub <- brfss24_sub %>%
+  mutate(across(
+    .cols = c(
+      where(is.integer),
+      where(is.character),
+      where(is.logical),
+      -X_PSU,
+      -X_STSTR,
+      -X_LLCPWT
+    ),
+    .fns = as.factor
+  ))
 ```
 
-Conversione a survey Obj
-```{r}
-brfss.design <- df %>%
+Creating a survey object in order to properly apply weights:
+
+```{r svy-obj}
+brfss.design <- brfss24_sub %>%
   as_survey_design(
     ids = X_PSU,
     weights = X_LLCPWT,
     strata = X_STSTR,
     nest = TRUE
   )
+options(survey.lonely.psu = "adjust")
 ```
 
 
-
-```{r}
-brfss.design %>%
-  group_by(X_STATE) %>%
-  summarise(
-    n        = n(),                          # numero grezzo di interviste
-    pop_est  = survey_total(vartype = NULL), # popolazione stimata rappresentata
-  ) %>%
-  mutate(
-    prop = round((pop_est / sum(pop_est)) * 100, 2)
-  ) %>%
-  arrange(desc(pop_est))
-```
-
+## Mammography participation by State
 
 ```{r}
 
@@ -67,87 +69,64 @@ choroplethr::state_choropleth(
   legend = "Proportion"
   )
 
-
-```
-## BMI value destribution by country (Weighted)
-
-```{r}
-ggplot(data = brfss.design) +
-  geom_boxplot(aes(X_STATE, X_BMI5, weight = X_LLCPWT))
-
-
-#ggplot(data = df %>% 
- # filter(X_STATE == "Maine")) +
-  #geom_point(aes(x = X_BI))
-
 ```
 
 ```{r, include = FALSE}
 # split per razza
 
-brfss.design %>%
-  filter(!is.na(X_STATE), !is.na(X_INCOMG1), !is.na(X_RACE)) %>%  # aggiungi X_RACE
-  filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
-  group_by(X_STATE, X_INCOMG1, X_RACE) %>%                          # aggiungi X_RACE
-  summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
-  group_by(X_STATE, X_RACE) %>%                                      # aggiungi X_RACE
-  mutate(prop = pop / sum(pop)) %>%
-  ungroup() %>%
+# start from df original
+df_filtered <- df %>%
   mutate(
-    X_STATE = fct_reorder(
-      X_STATE,
-      ifelse(X_INCOMG1 == "200k+", prop, NA),
-      .fun  = mean,
-      na.rm = TRUE
-    )
+    X_RACE = factor(
+      X_RACE,
+      levels = 1:8,
+      labels = c(
+        "White",
+        "Black",
+        "Am. Indian",
+        "Asian",
+        "Native Hawaiian",
+        "Other",
+        "Multiracial",
+        "Hispanic"
+      )
+    ),
+    X_INCOMG1 = as.factor(X_INCOMG1),
+    X_STATE   = as.factor(X_STATE)
   ) %>%
-  ggplot(aes(x = X_STATE, y = prop, fill = X_INCOMG1)) +
-  geom_col() +
-  coord_flip() +
-  facet_wrap(~ X_RACE, ncol = 2) +                                   # <- aggiunto
-  scale_y_continuous(labels = scales::percent_format()) +
-  scale_fill_brewer(palette = "RdYlGn", direction = 1) +
-  labs(
-    title    = "Distribuzione del reddito per stato e per etnia",
-    subtitle = "BRFSS 2024 — stime pesate",
-    x        = NULL,
-    y        = "Proporzione",
-    fill     = "Fascia di reddito"
-  ) +
-  theme_bw(base_size = 8) +
-  theme(
-    axis.text.y     = element_text(size = 5),   # testo più piccolo perché i pannelli sono tanti
-    axis.text.x     = element_text(size = 6),
-    legend.position = "bottom",
-    strip.text      = element_text(size = 7, face = "bold")  # titolo dei pannelli
+  filter(
+    !is.na(X_STATE),
+    !is.na(X_INCOMG1),
+    !is.na(X_RACE),
+  ) %>%
+  droplevels()
+
+# Step 2 — design obj
+design_filtered <- df_filtered %>%
+  as_survey_design(
+    ids     = X_PSU,
+    weights = X_LLCPWT,
+    strata  = X_STSTR,
+    nest    = TRUE
   )
-```
 
-
-
-
-## Income distribuzione by state (Weighted)
-
-```{r}
-## split per stato
-
-brfss.design %>%
-  filter(!is.na(X_STATE), !is.na(X_INCOMG1), !is.na(X_RACE)) %>%
+# Step 3 — plotting
+design_filtered %>%
   group_by(X_STATE, X_RACE, X_INCOMG1) %>%
   summarise(pop = survey_total(vartype = NULL),
             .groups = "drop") %>%
-  group_by(X_STATE, X_RACE) %>%                        # proporzione dentro ogni stato x razza
+  group_by(X_STATE, X_RACE) %>%
   mutate(prop = pop / sum(pop)) %>%
   ungroup() %>%
   ggplot(aes(x = X_RACE, y = prop, fill = X_INCOMG1)) +
   geom_col() +
   coord_flip() +
-  facet_wrap(~ X_STATE, ncol = 3) +                    # facet per stato
+  facet_wrap(~ X_STATE, ncol = 3) +
   scale_y_continuous(labels = scales::percent_format()) +
   scale_fill_brewer(palette = "RdYlGn", direction = 1) +
   labs(
     title    = "Distribuzione del reddito per razza — per stato",
-    subtitle = "BRFSS 2024 — stime pesate. Proporzioni calcolate per razza dentro ogni stato",
+    subtitle = "BRFSS 2024 — stime pesate",
     x        = NULL,
     y        = "Proporzione",
     fill     = "Fascia di reddito"
@@ -163,57 +142,99 @@ brfss.design %>%
 ```
 
 
-```{r, echo=FALSE,results='hide'}
-brfss.design %>%
-  filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
-  group_by(X_STATE, X_RACE) %>%
-  summarise(
-    n        = unweighted(n()),              # conteggio grezzo delle interviste
-    pop_est  = survey_total(vartype = NULL), # stima della popolazione pesata
-    .groups  = "drop"
-  ) %>%
-  group_by(X_STATE) %>%
-  mutate(prop = pop_est / sum(pop_est)) %>% # proporzione pesata per stato
-  ungroup()
-```
 
 ## Weighted Race per State
 
 ```{r}
+brfss.design <- brfss.design %>%
+  mutate(
+    X_RACE = factor(
+      X_RACE,
+      levels = 1:8,
+      labels = c(
+        "White",
+        "Black",
+        "American Indian",
+        "Asian",
+        "Native Hawaiian",
+        "Other",
+        "Multiracial",
+        "Hispanic"
+      )
+    )
+  )
+
 brfss.design %>%
   filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
   filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
   group_by(X_STATE, X_RACE) %>%
-  summarise(pop_est = survey_total(vartype = NULL), .groups = "drop") %>%
+  summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
   group_by(X_STATE) %>%
-  mutate(prop = pop_est / sum(pop_est)) %>%
+  mutate(prop = pop / sum(pop)) %>%
   ungroup() %>%
   mutate(X_STATE = fct_reorder(
     X_STATE,
-    ifelse(X_RACE == "Hispanic", prop, NA),
+    ifelse(X_RACE == "White", prop, NA),
     .fun = mean, na.rm = TRUE
   )) %>%
-  ggplot(aes(x = X_RACE, y = X_STATE, fill = prop)) +
-  geom_tile(color = "white", linewidth = 0.3) +
-  geom_text(aes(label = scales::percent(prop, accuracy = 1)),
-            size = 2, color = "black") +
-  scale_fill_gradient(
-    low    = "#fbf7f0",
-    high   = "#8b1e3f",
-    labels = scales::percent_format(),
-    name   = "Proporzione"
-  ) +
+  ggplot(aes(x = X_STATE, y = prop, fill = X_RACE)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "Set2") +
   labs(
-    title    = "Composizione etnica per stato",
+    title    = "Distribuzione etnica per stato",
     subtitle = "BRFSS 2024 — stime pesate",
     x        = NULL,
-    y        = NULL
+    y        = "Proporzione",
+    fill     = "Etnia"
   ) +
   theme_bw(base_size = 9) +
   theme(
-    axis.text.y = element_text(size = 7),
-    axis.text.x = element_text(angle = 35, hjust = 1, size = 7)
-  )
+    axis.text.y     = element_text(size = 7),
+    legend.position = "bottom",
+    legend.text     = element_text(size = 7)
+  ) +
+  guides(fill = guide_legend(nrow = 2))
+
+
 ```
+
+## Model with random intercept
+
+```{r, modello}
+
+library(lme4)
+
+model_mixed_female <- glmer(
+  any_screening ~ X_AGE_G + X_EDUCAG + X_INCOMG1 +
+                  X_HLTHPL2 + PERSDOC3 + X_RFSMOK3 +
+                  EXERANY2 + X_BMI5 + X_RACE +
+                  (1 | X_STATE),
+  family  = binomial,
+  data    = df %>% filter(X_SEX == "Female"),
+  control = glmerControl(
+    optimizer = "bobyqa",
+    optCtrl   = list(maxfun = 2e5)
+  )
+)
+
+summary(model_mixed_female)
+
+sjPlot::plot_model(model_mixed_female, type = "re", sort.est = TRUE, show.values = TRUE,value.offset = 0.3)
+
+sjPlot::plot_model(model_mixed_female, show.values = TRUE, show.p=TRUE, value.offset = 0.5, value.size = 3.5)
+
+# Calcolo dell'ICC
+# L'ICC indica quale frazione della variabilità totale non spiegata dai predittori è attribuibile alle differenze tra stati.
+# L'ICC risulta molto basso. Solo lo 0,7 della varaibilità dipende dallo stato
+
+sigma2_u <- as.data.frame(VarCorr(model_mixed_female))$vcov[1]
+icc <- sigma2_u / (sigma2_u + pi^2/3)
+icc
+
+
+```
+
 
 
