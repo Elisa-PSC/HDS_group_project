@@ -626,7 +626,7 @@ model_mixed_female <- glmer(
                   EXERANY2 + X_BMI5 + X_RACE +
                   (1 | X_STATE),
   family  = binomial,
-  data    = brfss24_sub %>% filter(X_SEX == "Female"),
+  data    = brfss.design %>% filter(X_SEX == "Female"),
   control = glmerControl(
     optimizer = "bobyqa",
     optCtrl   = list(maxfun = 2e5)
