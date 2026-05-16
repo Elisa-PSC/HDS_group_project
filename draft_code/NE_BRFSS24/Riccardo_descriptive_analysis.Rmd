@@ -212,7 +212,7 @@ model_mixed_female <- glmer(
                   EXERANY2 + X_BMI5 + X_RACE +
                   (1 | X_STATE),
   family  = binomial,
-  data    = df %>% filter(X_SEX == "Female"),
+  data    = brfss.design %>% filter(X_SEX == "Female"),
   control = glmerControl(
     optimizer = "bobyqa",
     optCtrl   = list(maxfun = 2e5)
@@ -237,4 +237,62 @@ icc
 ```
 
 
+## Model with random intercept con piú stati
 
+```{r, modello}
+
+brfss24_stati <- read.csv("brfss24_stati.csv")
+
+brfss24_stati <- brfss24_stati %>%
+  mutate(across(
+    .cols = c(
+      where(is.integer),
+      where(is.character),
+      where(is.logical),
+      -X_PSU,
+      -X_STSTR,
+      -X_LLCPWT
+    ),
+    .fns = as.factor
+  ))
+
+brfss.design.stati <- brfss24_stati %>%
+  as_survey_design(
+    ids = X_PSU,
+    weights = X_LLCPWT,
+    strata = X_STSTR,
+    nest = TRUE
+  )
+options(survey.lonely.psu = "adjust")
+
+library(lme4)
+
+model_mixed_female <- glmer(
+  any_screening ~ X_AGE_G + X_EDUCAG + X_INCOMG1 +
+                  X_HLTHPL2 + PERSDOC3 + X_RFSMOK3 +
+                  EXERANY2 + X_BMI5 + X_RACE +
+                  (1 | X_STATE),
+  family  = binomial,
+  data    = brfss.design.stati %>% filter(X_SEX == "Female"),
+  control = glmerControl(
+    optimizer = "bobyqa",
+    optCtrl   = list(maxfun = 2e5)
+  )
+)
+
+summary(model_mixed_female)
+
+sjPlot::plot_model(model_mixed_female, type = "re", sort.est = TRUE, show.values = TRUE,value.offset = 0.3)
+
+sjPlot::plot_model(model_mixed_female, show.values = TRUE, show.p=TRUE, value.offset = 0.5, value.size = 3.5)
+
+# Calcolo dell'ICC
+# L'ICC indica quale frazione della variabilità totale non spiegata dai predittori è attribuibile alle differenze tra stati.
+# L'ICC risulta molto basso. Solo lo 0,7 della varaibilità dipende dallo stato
+
+sigma2_u <- as.data.frame(VarCorr(model_mixed_female))$vcov[1]
+icc <- sigma2_u / (sigma2_u + pi^2/3)
+icc
+
+
+```
