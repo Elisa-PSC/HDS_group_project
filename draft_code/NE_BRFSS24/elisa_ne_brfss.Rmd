@@ -232,7 +232,6 @@ brfss.design <- brfss.design %>%
 
 brfss.design %>%
   filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
-  filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
   group_by(X_STATE, X_RACE) %>%
   summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
   group_by(X_STATE) %>%
@@ -249,11 +248,11 @@ brfss.design %>%
   scale_y_continuous(labels = scales::percent_format()) +
   scale_fill_brewer(palette = "Set2") +
   labs(
-    title    = "Distribuzione etnica per stato",
+    title    = "Race distribution by state",
     subtitle = "BRFSS 2024 — stime pesate",
     x        = NULL,
-    y        = "Proporzione",
-    fill     = "Etnia"
+    y        = "Proportion",
+    fill     = "Race"
   ) +
   theme_bw(base_size = 9) +
   theme(
