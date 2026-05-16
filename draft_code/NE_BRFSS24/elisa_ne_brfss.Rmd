@@ -540,6 +540,33 @@ ins_screen %>%
   theme(legend.position = "none")
 ```
 
+## Mammography participation by State
+
+```{r}
+
+# Calcola la proporzione di mammografia per stato pesata
+state_mam_weighted <- brfss.design %>%
+  filter(!is.na(HADMAM), !is.na(X_STATE)) %>%
+  group_by(X_STATE) %>%
+  summarise(
+    value = survey_mean(HADMAM == 1, na.rm = TRUE, vartype = "ci")
+  ) %>%
+  mutate(region = tolower(X_STATE))
+
+nordest <- c("connecticut", "massachusetts",
+             "rhode island", "vermont", "new hampshire",
+             "maine")
+
+# La mappa
+choroplethr::state_choropleth(
+  state_mam_weighted,
+  title  = "Mammography participation by State",
+  legend = "Proportion"
+  )
+
+```
+
+
 # Models
 
 ```{r model-var-selection}
