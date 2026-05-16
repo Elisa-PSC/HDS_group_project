@@ -168,6 +168,7 @@ ggplot(agesex_screen, aes(age, prop, colour = sex, group = sex)) +
         plot.title = element_text(face = "bold", size = 14))
 ```
 
+
 ```{r age-distribution}
 ggplot(brfss24_sub %>% drop_na(X_AGE_G)) +
   geom_bar(
@@ -209,6 +210,60 @@ ggplot(plot_don, aes(x = "", y = prop, fill = X_SEX)) +
   labs(title = "Sex Distribution Percentage", fill = "Sex") +
   theme(plot.title = element_text(face = "bold", size = 14))
 ```
+### Race Distribution
+```{r}
+brfss.design <- brfss.design %>%
+  mutate(
+    X_RACE = factor(
+      X_RACE,
+      levels = 1:8,
+      labels = c(
+        "White",
+        "Black",
+        "American Indian",
+        "Asian",
+        "Native Hawaiian",
+        "Other",
+        "Multiracial",
+        "Hispanic"
+      )
+    )
+  )
+
+brfss.design %>%
+  filter(!is.na(X_RACE), !is.na(X_STATE)) %>%
+  filter(!X_STATE %in% c("Guam", "Puerto Rico", "Virgin Islands")) %>%
+  group_by(X_STATE, X_RACE) %>%
+  summarise(pop = survey_total(vartype = NULL), .groups = "drop") %>%
+  group_by(X_STATE) %>%
+  mutate(prop = pop / sum(pop)) %>%
+  ungroup() %>%
+  mutate(X_STATE = fct_reorder(
+    X_STATE,
+    ifelse(X_RACE == "White", prop, NA),
+    .fun = mean, na.rm = TRUE
+  )) %>%
+  ggplot(aes(x = X_STATE, y = prop, fill = X_RACE)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title    = "Distribuzione etnica per stato",
+    subtitle = "BRFSS 2024 — stime pesate",
+    x        = NULL,
+    y        = "Proporzione",
+    fill     = "Etnia"
+  ) +
+  theme_bw(base_size = 9) +
+  theme(
+    axis.text.y     = element_text(size = 7),
+    legend.position = "bottom",
+    legend.text     = element_text(size = 7)
+  ) +
+  guides(fill = guide_legend(nrow = 2))
+```
+
 
 ### BMI distribution
 
